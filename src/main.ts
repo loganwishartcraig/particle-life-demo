@@ -2,6 +2,7 @@ import "./style.css";
 
 // Source: https://www.youtube.com/watch?v=scvuli-zcRc
 function main() {
+  console.log("source: https://www.youtube.com/watch?v=scvuli-zcRc");
   const canvas = document.getElementById("canvas") as HTMLCanvasElement | null;
   if (!canvas) {
     console.error("No canvas found");
@@ -84,7 +85,6 @@ function main() {
       let totalForceX = 0;
       let totalForceY = 0;
 
-      // for (let j = 0; j < n; j++) {
       for (const j of neighbors(i)) {
         if (j === i) continue;
         const dx = posX[j] - posX[i];
@@ -145,28 +145,9 @@ function main() {
     ctx!.fillStyle = "black";
     ctx!.fillRect(0, 0, canvas!.width, canvas!.height);
 
-    const stat = (array: Float32Array) => {
-      const n = array.length;
-      const mean = array.reduce((a, b) => a + b) / n;
-      const std = Math.sqrt(
-        array.map((x) => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / n,
-      );
-
-      return { mean, std };
-    };
-
     const lightness = (i: number) => {
       const w = 0.013;
       const acc = Math.max(Math.min(Math.max(accY[i], accX[i]), w), -w);
-
-      //  (-0.012, 25)
-      //  (0.012, 100)
-
-      // => m = (dY)/(dX) = (75 / 0.024)
-      // => y - 100 = (75/0.024)*(x - 0.012)
-
-      // console.log(acc);
-
       return (75 / (w * 2)) * (acc - w) + 100;
     };
 
@@ -175,16 +156,7 @@ function main() {
       const screenX = posX[i] * canvas!.width;
       const screenY = posY[i] * canvas!.height;
       ctx!.arc(screenX, screenY, 1.5, 0, 2 * Math.PI);
-      // console.log(lightness(i));
       ctx!.fillStyle = `hsl(${(360 / m) * colors[i]}, 100%, ${lightness(i)}%)`;
-      // console.log(stat(accX));
-      // ctx!.fillStyle = `hsl(, 100%, ${
-      //   100 -
-      //   75 /
-      //     (1 +
-      //       0.001 *
-      //         Math.pow(Math.E, 130 * Math.abs(accX[i]) + Math.abs(accY[i])))
-      // }%)`;
       ctx!.fill();
     }
 
