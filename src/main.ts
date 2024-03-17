@@ -19,7 +19,7 @@ function main() {
   const dt = 0.02;
   const fractionHalfLife = 0.04;
   const rMax = 0.1;
-  const m = 6;
+  const m = Math.floor(7 * Math.random()) + 2;
   const matrix = Array.from({ length: m }, () =>
     Array.from({ length: m }, () => Math.random() * 2 - 1),
   );
