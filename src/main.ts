@@ -1,5 +1,6 @@
 import "./style.css";
 
+// Source: https://www.youtube.com/watch?v=scvuli-zcRc
 function main() {
   const canvas = document.getElementById("canvas") as HTMLCanvasElement | null;
   if (!canvas) {
@@ -23,13 +24,22 @@ function main() {
   );
 
   const frictionFactor = Math.pow(0.5, dt / fractionHalfLife);
-  const forceFactor = 10;
+  const forceFactor = 5;
 
   const colors = new Int32Array(n);
   const posX = new Float32Array(n);
   const posY = new Float32Array(n);
   const velX = new Float32Array(n);
   const velY = new Float32Array(n);
+  const accX = new Float32Array(n);
+  const accY = new Float32Array(n);
+
+  const rows = Math.ceil(1 / rMax);
+  const cols = Math.ceil(1 / rMax);
+  const cells = Array.from({ length: rows }, () =>
+    Array.from({ length: cols }, () => new Set<number>()),
+  );
+  const binAdjustment = 1e-10;
 
   for (let i = 0; i < n; i++) {
     colors[i] = Math.floor(Math.random() * m);
@@ -37,6 +47,9 @@ function main() {
     posY[i] = Math.random();
     velX[i] = 0;
     velY[i] = 0;
+    accX[i] = 0;
+    accY[i] = 0;
+    cells[Math.floor(posX[i] / rMax)][Math.floor(posY[i] / rMax)].add(i);
   }
 
   function force(r: number, a: number) {
@@ -50,15 +63,36 @@ function main() {
     return 0;
   }
 
+  function* neighbors(i: number) {
+    const row = Math.floor(posX[i] / rMax);
+    const col = Math.floor(posY[i] / rMax);
+
+    for (let x = -1; x < 2; x++) {
+      for (let y = -1; y < 2; y++) {
+        const neighborRow = (row + x + rows) % rows;
+        const neighborCol = (col + y + cols) % cols;
+
+        for (const cell of cells[neighborRow][neighborCol]) {
+          yield cell;
+        }
+      }
+    }
+  }
+
   function draw() {
     for (let i = 0; i < n; i++) {
       let totalForceX = 0;
       let totalForceY = 0;
 
-      for (let j = 0; j < n; j++) {
+      // for (let j = 0; j < n; j++) {
+      for (const j of neighbors(i)) {
         if (j === i) continue;
-        const rx = posX[j] - posX[i];
-        const ry = posY[j] - posY[i];
+        const dx = posX[j] - posX[i];
+        const dy = posY[j] - posY[i];
+
+        const rx = Math.abs(dx) > 0.5 ? dx - (dx < 0 ? -1 : 1) : dx;
+        const ry = Math.abs(dy) > 0.5 ? dy - (dy < 0 ? -1 : 1) : dy;
+
         const r = Math.hypot(rx, ry);
         if (r > 0 && r < rMax) {
           const f = force(r / rMax, matrix[colors[i]][colors[j]]);
@@ -70,27 +104,87 @@ function main() {
       totalForceX *= rMax * forceFactor;
       totalForceY *= rMax * forceFactor;
 
+      accX[i] = velX[i];
+      accY[i] = velY[i];
+
       velX[i] *= frictionFactor;
       velY[i] *= frictionFactor;
 
       velX[i] += totalForceX * dt;
       velY[i] += totalForceY * dt;
+
+      accX[i] = velX[i] - accX[i];
+      accY[i] = velY[i] - accY[i];
     }
 
     for (let i = 0; i < n; i++) {
-      posX[i] += velX[i] * dt;
-      posY[i] += velY[i] * dt;
+      cells[Math.floor(posX[i] / rMax - binAdjustment)][
+        Math.floor(posY[i] / rMax - binAdjustment)
+      ].delete(i);
+
+      posX[i] = (((posX[i] + velX[i] * dt) % 1) + 1) % 1;
+      posY[i] = (((posY[i] + velY[i] * dt) % 1) + 1) % 1;
+
+      try {
+        cells[Math.floor(posX[i] / rMax - binAdjustment)][
+          Math.floor(posY[i] / rMax - binAdjustment)
+        ].add(i);
+      } catch (e) {
+        console.warn(
+          "failed to add ",
+          i,
+          posX[i],
+          posY[i],
+          Math.floor(posX[i] / rMax),
+          Math.floor(posY[i] / rMax),
+        );
+        throw e;
+      }
     }
 
     ctx!.fillStyle = "black";
     ctx!.fillRect(0, 0, canvas!.width, canvas!.height);
 
+    const stat = (array: Float32Array) => {
+      const n = array.length;
+      const mean = array.reduce((a, b) => a + b) / n;
+      const std = Math.sqrt(
+        array.map((x) => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / n,
+      );
+
+      return { mean, std };
+    };
+
+    const lightness = (i: number) => {
+      const w = 0.013;
+      const acc = Math.max(Math.min(Math.max(accY[i], accX[i]), w), -w);
+
+      //  (-0.012, 25)
+      //  (0.012, 100)
+
+      // => m = (dY)/(dX) = (75 / 0.024)
+      // => y - 100 = (75/0.024)*(x - 0.012)
+
+      // console.log(acc);
+
+      return (75 / (w * 2)) * (acc - w) + 100;
+    };
+
     for (let i = 0; i < n; i++) {
       ctx!.beginPath();
       const screenX = posX[i] * canvas!.width;
       const screenY = posY[i] * canvas!.height;
-      ctx!.arc(screenX, screenY, 1, 0, 2 * Math.PI);
-      ctx!.fillStyle = `hsl(${360 * (colors[i] / m)}, 100%, 50%)`;
+      ctx!.arc(screenX, screenY, 1.5, 0, 2 * Math.PI);
+      // console.log(lightness(i));
+      ctx!.fillStyle = `hsl(${(360 / m) * colors[i]}, 100%, ${lightness(i)}%)`;
+      // console.log(stat(accX));
+      // ctx!.fillStyle = `hsl(, 100%, ${
+      //   100 -
+      //   75 /
+      //     (1 +
+      //       0.001 *
+      //         Math.pow(Math.E, 130 * Math.abs(accX[i]) + Math.abs(accY[i])))
+      // }%)`;
       ctx!.fill();
     }
 
