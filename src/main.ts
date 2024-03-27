@@ -1,7 +1,23 @@
 import "./style.css";
 
+// Source: https://stackoverflow.com/questions/521295/seeding-the-random-number-generator-in-javascript
+function splitmix32(a: number) {
+  return function () {
+    a |= 0;
+    a = (a + 0x9e3779b9) | 0;
+    let t = a ^ (a >>> 16);
+    t = Math.imul(t, 0x21f0aaad);
+    t = t ^ (t >>> 15);
+    t = Math.imul(t, 0x735a2d97);
+    return ((t = t ^ (t >>> 15)) >>> 0) / 4294967296;
+  };
+}
+
+let currentSeed = Math.round(Date.now() * Math.random());
+
 // Source: https://www.youtube.com/watch?v=scvuli-zcRc
-function main() {
+function main(usedSeed: number) {
+  let rng = splitmix32(usedSeed);
   console.log("source: https://www.youtube.com/watch?v=scvuli-zcRc");
   const canvas = document.getElementById("canvas") as HTMLCanvasElement | null;
   if (!canvas) {
@@ -19,13 +35,13 @@ function main() {
   const dt = 0.02;
   const fractionHalfLife = 0.04;
   const rMax = 0.1;
-  const m = Math.floor(7 * Math.random()) + 2;
+  const m = Math.floor(7 * rng()) + 2;
   const matrix = Array.from({ length: m }, () =>
-    Array.from({ length: m }, () => Math.random() * 2 - 1),
+    Array.from({ length: m }, () => rng() * 2 - 1),
   );
 
   const frictionFactor = Math.pow(0.5, dt / fractionHalfLife);
-  const forceFactor = 5;
+  const forceFactor = 2;
 
   const colors = new Int32Array(n);
   const posX = new Float32Array(n);
@@ -43,9 +59,9 @@ function main() {
   const binAdjustment = 1e-10;
 
   for (let i = 0; i < n; i++) {
-    colors[i] = Math.floor(Math.random() * m);
-    posX[i] = Math.random();
-    posY[i] = Math.random();
+    colors[i] = Math.floor(rng() * m);
+    posX[i] = rng();
+    posY[i] = rng();
     velX[i] = 0;
     velY[i] = 0;
     accX[i] = 0;
@@ -155,15 +171,60 @@ function main() {
       ctx!.beginPath();
       const screenX = posX[i] * canvas!.width;
       const screenY = posY[i] * canvas!.height;
-      ctx!.arc(screenX, screenY, 1.5, 0, 2 * Math.PI);
+      ctx!.arc(screenX, screenY, 1.25, 0, 2 * Math.PI);
       ctx!.fillStyle = `hsl(${(360 / m) * colors[i]}, 100%, ${lightness(i)}%)`;
       ctx!.fill();
     }
 
-    requestAnimationFrame(draw);
+    if (usedSeed === currentSeed) {
+      requestAnimationFrame(draw);
+    } else {
+      main(currentSeed);
+    }
   }
 
   requestAnimationFrame(draw);
 }
 
-main();
+function handleResize() {
+  const canvas = document.getElementById("canvas") as HTMLCanvasElement | null;
+  if (!canvas) {
+    console.error("No canvas found");
+    return;
+  }
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    console.error("Unable to get ctx");
+    return;
+  }
+
+  ctx.canvas.width = window.innerWidth;
+  ctx.canvas.height = window.innerHeight;
+}
+
+function debounce<Fn extends (...args: any[]) => any>(fn: Fn, wait: number) {
+  let timerId: ReturnType<typeof setTimeout>;
+
+  return function debounced(...args: Parameters<Fn>) {
+    clearTimeout(timerId);
+    timerId = setTimeout(() => {
+      fn(...args);
+    }, wait);
+  };
+}
+
+window.addEventListener("resize", debounce(handleResize, 100));
+
+const seedBtn = document.getElementById("seed-btn");
+
+if (seedBtn) {
+  seedBtn.innerText = currentSeed.toString();
+  seedBtn.addEventListener("click", ({ target }) => {
+    currentSeed = Math.round(Date.now() * Math.random());
+    (target as HTMLButtonElement).innerText = currentSeed.toString();
+  });
+}
+
+handleResize();
+main(currentSeed);
